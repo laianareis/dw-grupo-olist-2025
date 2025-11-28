@@ -1,20 +1,42 @@
--- 04_VALIDATE.SQL - Checagens finais
-SELECT 'Validações DW Olist' as check;
+-- 04_VALIDATE.SQL
 
--- Contagens
-SELECT 'staging_orders', COUNT(*) FROM stg_orders
-UNION ALL SELECT 'oltp_orders', COUNT(*) FROM oltp_orders
-UNION ALL SELECT 'fact_sales', COUNT(*) FROM fact_sales;
+-- 1. Resumo da Execução
+SELECT * FROM dw.etl_logs ORDER BY log_id DESC LIMIT 1;
 
--- Integridade FK
-SELECT 'fact_sales sem customer?', COUNT(*) FROM fact_sales WHERE sk_customer IS NULL;
-SELECT 'fact_sales sem product?', COUNT(*) FROM fact_sales WHERE sk_product IS NULL;
+-- 2. Teste de Unicidade de Fato (Grain Check)
+SELECT 
+    'Fact Uniqueness' as check_name,
+    CASE WHEN COUNT(*) > 0 THEN 'FAIL' ELSE 'PASS' END as status
+FROM (
+    SELECT order_id, order_item_id, COUNT(*) 
+    FROM dw.fact_sales 
+    GROUP BY 1, 2 
+    HAVING COUNT(*) > 1
+);
 
--- NULLs críticos
-SELECT 'price NULL?', COUNT(*) FROM fact_sales WHERE price IS NULL;
-SELECT 'date_key NULL?', COUNT(*) FROM fact_sales WHERE date_key IS NULL;
+-- 3. Teste de Integridade Referencial (Orphans)
+SELECT 
+    'Orphan Customers' as check_name,
+    COUNT(*) as fail_count
+FROM dw.fact_sales f
+LEFT JOIN dw.dim_customer d ON f.sk_customer = d.sk_customer
+WHERE d.sk_customer IS NULL;
 
--- Teste analítico
-SELECT 'Top categoria:', dp.product_category_name, COUNT(*) as vendas
-FROM fact_sales f JOIN dim_product dp ON f.sk_product = dp.sk_product
-GROUP BY 2 ORDER BY 3 DESC LIMIT 3;
+-- 4. Validação Lógica SCD2
+-- Não deve haver dois registros is_current=true para o mesmo ID original
+SELECT 
+    'SCD2 Active Flags' as check_name,
+    CASE WHEN COUNT(*) > 0 THEN 'FAIL' ELSE 'PASS' END as status
+FROM (
+    SELECT customer_unique_id, COUNT(*) 
+    FROM dw.dim_customer 
+    WHERE is_current = TRUE 
+    GROUP BY 1 
+    HAVING COUNT(*) > 1
+);
+
+-- 5. Validação Financeira
+SELECT 
+    'Total Sales Value' as metric,
+    SUM(total_amount) as value
+FROM dw.fact_sales;

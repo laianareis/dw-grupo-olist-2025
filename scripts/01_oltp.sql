@@ -1,32 +1,41 @@
--- 01_OLTP.SQL - Normalizado e limpo
-DROP TABLE IF EXISTS oltp_customers;
-DROP TABLE IF EXISTS oltp_products;
-DROP TABLE IF EXISTS oltp_sellers;
-DROP TABLE IF EXISTS oltp_orders;
+-- 01_OLTP.SQL
+-- Camada Intermediária: Limpeza e Normalização (Silver Layer)
 
--- Clientes (remove duplicatas customer_unique_id)
-CREATE TABLE oltp_customers AS
-SELECT DISTINCT customer_unique_id, customer_id, customer_zip_code_prefix,
-       customer_city, customer_state
-FROM stg_customers WHERE customer_unique_id IS NOT NULL;
+CREATE SCHEMA IF NOT EXISTS oltp;
 
--- Produtos (limpa NULLs)
-CREATE TABLE oltp_products AS
-SELECT product_id, product_category_name,
-       COALESCE(product_weight_g, 0) as product_weight_g,
-       COALESCE(product_length_cm, 0) as product_length_cm
-FROM stg_products WHERE product_id IS NOT NULL;
+-- Clientes: Deduplicação na fonte
+CREATE OR REPLACE TABLE oltp.customers AS
+SELECT DISTINCT 
+    customer_unique_id, 
+    first(customer_id) as customer_id, -- Arbitragem de ID
+    first(customer_zip_code_prefix) as zip_code,
+    first(customer_city) as city,
+    first(customer_state) as state
+FROM staging.stg_customers 
+WHERE customer_unique_id IS NOT NULL
+GROUP BY customer_unique_id;
+
+-- Produtos: Tratamento de Nulos
+CREATE OR REPLACE TABLE oltp.products AS
+SELECT 
+    product_id, 
+    COALESCE(product_category_name, 'n/a') as category_name,
+    COALESCE(product_weight_g, 0) as weight_g,
+    COALESCE(product_length_cm, 0) as length_cm
+FROM staging.stg_products 
+WHERE product_id IS NOT NULL;
 
 -- Vendedores
-CREATE TABLE oltp_sellers AS
+CREATE OR REPLACE TABLE oltp.sellers AS
 SELECT DISTINCT seller_id, seller_zip_code_prefix, seller_city, seller_state
-FROM stg_sellers WHERE seller_id IS NOT NULL;
+FROM staging.stg_sellers 
+WHERE seller_id IS NOT NULL;
 
--- Pedidos (status válidos)
-CREATE TABLE oltp_orders AS
-SELECT order_id, customer_id, order_status, order_purchase_timestamp,
-       order_delivered_carrier_date, order_delivered_customer_date,
-       order_estimated_delivery_date
-FROM stg_orders 
-WHERE order_status IN ('delivered', 'shipped', 'invoiced', 'processing', 'canceled')
+-- Pedidos: Filtro de Regra de Negócio
+CREATE OR REPLACE TABLE oltp.orders AS
+SELECT 
+    order_id, customer_id, order_status, 
+    CAST(order_purchase_timestamp AS TIMESTAMP) as purchase_ts
+FROM staging.stg_orders 
+WHERE order_status NOT IN ('canceled', 'unavailable') 
   AND order_purchase_timestamp IS NOT NULL;

@@ -34,6 +34,6 @@ Run-Step 'scripts/02_dw_model.sql'
 Run-Step 'scripts/03_etl_load.sql'
 Run-Step 'scripts/04_validate.sql'
 Run-Step 'scripts/05_analytics.sql'
-Run-Step 'scripts/05_performance.sql'
+Run-Step 'scripts/06_performance.sql'
 
 Write-Host "Pipeline concluído com sucesso." -ForegroundColor Green
