@@ -84,21 +84,3 @@ SELECT
 FROM dw.agg_sales_monthly
 WHERE year = 2017 -- Exemplo de filtro comum
 ORDER BY year, category_name;
-
--- ====================================================================
--- DOCUMENTAÇÃO DE RESULTADOS (Exemplo de Leitura do Output)
--- ====================================================================
-/*
-    COMO INTERPRETAR O OUTPUT DO "EXPLAIN ANALYZE":
-    
-    1. Procure por "Total Time" ou "Execution Time" no topo da árvore.
-    
-    COMPARATIVO ESPERADO:
-    - Query Lenta: Deve levar X ms (Scan na Fato + 3 Joins Hash + Group By pesado).
-    - Query Rápida: Deve levar X/100 ms (Scan simples em tabela pequena).
-    
-    POR QUE É MAIS RÁPIDO?
-    1. Pré-cálculo: O custo do JOIN e GROUP BY foi pago na criação da tabela (ETL), não na leitura.
-    2. I/O Reduzido: A tabela 'agg_sales_monthly' tem ~1% do tamanho da 'fact_sales', exigindo menos leitura de disco.
-    3. Colunar: DuckDB lê apenas as colunas solicitadas.
-*/
